@@ -9,3 +9,35 @@ services:
       - MYSQL_ROOT_PASSWORD=12341234
     volumes:
       - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  team-redis:
+    image: "redis:latest"
+    container_name: "team-redis"
+    ports:
+      - 6379:6379
+    environment:
+      - REDIS_PASSWORD=12341234 
+    command: ["redis-server", "--requirepass", "12341234"] 
+    
+  team-rabbitmq:
+    image: "rabbitmq:management"
+    container_name: "team-rabbitmq"
+    ports:
+      - 5672:5672
+      - 15672:15672
+    environment:
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=12341234
+    volumes:
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+
+  team-vault:
+    image: hashicorp/vault:1.14.4
+    container_name: "team-vault"
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: myroot
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    ports:
+      - "8200:8200"

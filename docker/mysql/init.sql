@@ -11,28 +11,33 @@ CREATE TABLE IF NOT EXISTS users (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,                   
     email VARCHAR(255) NOT NULL UNIQUE,                   
     password VARCHAR(255) NULL,                           
-    nickname VARCHAR(100) NOT NULL,                      
+    nickname VARCHAR(100) NOT NULL,
+    phone_number VARCHAR(20) NULL,   
     role ENUM('STUDENT', 'INSTRUCTOR', 'ADMIN') NOT NULL DEFAULT 'STUDENT',
-    provider ENUM('LOCAL', 'GOOGLE', 'NAVER', 'KAKAO') DEFAULT 'LOCAL',  
+    provider ENUM('LOCAL', 'GOOGLE', 'NAVER', 'KAKAO') NOT NULL DEFAULT 'LOCAL',  
     provider_id VARCHAR(255) NULL,                       
     profile_image VARCHAR(255) NULL,                    
-    status ENUM('ACTIVE', 'INACTIVE', 'BANNED') DEFAULT 'ACTIVE',  
-    last_login TIMESTAMP NULL,                          
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_verified BOOLEAN DEFAULT FALSE                   -- 이메일 인증 여부 추가
+    status ENUM('ACTIVE', 'INACTIVE', 'BANNED') NOT NULL DEFAULT 'ACTIVE',  
+    status_changed_at TIMESTAMP NULL DEFAULT NULL, 
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
 
 -- 2. teachers 테이블 생성 (외래키 포함)
 CREATE TABLE IF NOT EXISTS teachers (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,               
-    user_id BIGINT NOT NULL,                           
-    bio TEXT NULL,                                      
-    profile_image VARCHAR(255) DEFAULT NULL,           
-    rating FLOAT DEFAULT 0.0,                          
+    user_id BIGINT NOT NULL,                            
+    name VARCHAR(100) NOT NULL,                         -- 신청 시 이름
+    bio TEXT NOT NULL,                                  -- 자기소개
+    category VARCHAR(50) NOT NULL,                      -- 카테고리 (프론트에서 선택된 값 그대로)
+    profile_image VARCHAR(255) DEFAULT NULL,            -- S3 URL
+    resume_file VARCHAR(255) DEFAULT NULL,              -- S3 URL
+    rating FLOAT DEFAULT 0.0,                           
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,     
-    status ENUM('PENDING', 'APPROVED', 'REJECTED') DEFAULT 'PENDING',  
-    FOREIGN KEY (user_id) REFERENCES users(id)          
-    ON DELETE CASCADE ON UPDATE CASCADE                
+    teacher_status ENUM('PENDING', 'APPROVED', 'REJECTED') DEFAULT 'PENDING',
+    
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- 3. email_verification 테이블 생성
@@ -52,6 +57,7 @@ USE `courses`;
 CREATE TABLE IF NOT EXISTS product (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     instructor_id BIGINT NOT NULL,
+    instructor_name VARCHAR(100) NOT NULL,
     title VARCHAR(255) NOT NULL,
     description TEXT NOT NULL,
     price DECIMAL(10, 2) NOT NULL,
