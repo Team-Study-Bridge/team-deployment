@@ -10,6 +10,7 @@ services:
       - TZ=Asia/Seoul  
     volumes:
       - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./mysql/conf.d:/etc/mysql/conf.d
 
   team-redis:
     image: "redis:latest"
@@ -45,6 +46,7 @@ services:
       - TZ=Asia/Seoul
     ports:
       - 8200:8200
+
   team-zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: "team-zookeeper"
@@ -52,6 +54,21 @@ services:
       - "2181:2181"
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+          
+  team-mongodb:
+    image: mongo:6.0
+    container_name: ai_code_helper
+    ports:
+      - 27017:27017
+    environment:
+      - TZ=Asia/Seoul
+    volumes:
+      - ./mongo/data:/data/db
 
   team-kafka:
     image: confluentinc/cp-kafka:7.5.0
@@ -64,46 +81,53 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-  config-service:
-    build:
-      context: ../../backend/config-service
-      dockerfile: Dockerfile
-    container_name: "config-service"
-    depends_on:
-      - team-vault
-    ports:
-      - 8888:8888
+      KAFKA_HEAP_OPTS: "-Xmx256M -Xms128M" # ✅ JVM 메모리 제한
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M # 조금 넉넉하게
 
-  gateway-service:
-    build:
-      context: ../../backend/gateway-service
-      dockerfile: Dockerfile
-    container_name: "gateway-service"
-    depends_on:
-      - team-redis
-    ports:
-      - 9000:9000
+  # config-service:
+  #   build:
+  #     context: ../../backend/config-service
+  #     dockerfile: Dockerfile
+  #   container_name: "config-service"
+  #   depends_on:
+  #     - team-vault
+  #   ports:
+  #     - 8888:8888
+
+  # gateway-service:
+  #   build:
+  #     context: ../../backend/gateway-service
+  #     dockerfile: Dockerfile
+  #   container_name: "gateway-service"
+  #   depends_on:
+  #     - team-redis
+  #   ports:
+  #     - 9000:9000
       
-  auth-service:
-    build:
-      context: ../../backend/auth-service
-      dockerfile: Dockerfile
-    container_name: "auth-service"
-    ports:
-      - 9001:9001
+  # auth-service:
+  #   build:
+  #     context: ../../backend/auth-service
+  #     dockerfile: Dockerfile
+  #   container_name: "auth-service"
+  #   ports:
+  #     - 9001:9001
 
-  front-service:
-    build:
-      context: ../../frontend/whimsical-pastel-portal
-      dockerfile: Dockerfile
-    container_name: "front-service"
-    ports:
-      - 8080:8080
+  # front-service:
+  #   build:
+  #     context: ../../frontend/whimsical-pastel-portal
+  #     dockerfile: Dockerfile
+  #   container_name: "front-service"
+  #   ports:
+  #     - 8080:8080
 
-  lecture-service:
-    build:
-      context: ../../backend/lecture-service
-      dockerfile: Dockerfile
-    container_name: "lecture-service"
-    ports:
-      - 9004:9004
+  # lecture-service:
+  #   build:
+  #     context: ../../backend/lecture-service
+  #     dockerfile: Dockerfile
+  #   container_name: "lecture-service"
+  #   ports:
+  #     - 9004:9004
