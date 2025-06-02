@@ -1,13 +1,11 @@
-
-CREATE DATABASE IF NOT EXISTS `lecture`;   -- 강의 관련 데이터베이스 (강의 정보 및 강의 콘텐츠 저장)
-CREATE DATABASE IF NOT EXISTS `order`;     -- 결제 관련 데이터베이스 (결제 기록 저장)
-CREATE DATABASE IF NOT EXISTS `user`;      -- 사용자 관련 데이터베이스 (사용자 정보 및 강사 정보 저장)
+CREATE DATABASE IF NOT EXISTS `user`;
+CREATE DATABASE IF NOT EXISTS `lecture`;
+CREATE DATABASE IF NOT EXISTS `order`;
 CREATE DATABASE IF NOT EXISTS `notitable`;
 
--- 사용 데이터베이스 설정: 사용자 관련 테이블을 'user' 데이터베이스에 생성한다.
+-- 사용자 관련 테이블(유저 정보, 강사 정보, 이메일 검증)을 'user' 데이터베이스에 생성한다.
 USE `user`;
 
--- 1. users 테이블 (변경 없음)
 CREATE TABLE IF NOT EXISTS users (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,                   
     email VARCHAR(255) NOT NULL UNIQUE,                   
@@ -24,14 +22,13 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 2. teachers 테이블 (id → users.id와 동일한 PK이자 FK)
 CREATE TABLE IF NOT EXISTS teachers (
-    id BIGINT PRIMARY KEY,                                 -- user_id와 동일
+    id BIGINT PRIMARY KEY,                                 -- user_id와 동일한 PK이자 FK
     name VARCHAR(100) NOT NULL,                            -- 신청 시 이름
     bio TEXT NOT NULL,                                     -- 자기소개
     category VARCHAR(50) NOT NULL,                         -- 카테고리
-    profile_image VARCHAR(1024) DEFAULT NULL,               -- S3 URL
-    resume_file VARCHAR(1024) DEFAULT NULL,                 -- S3 URL
+    profile_image VARCHAR(1024) DEFAULT NULL,              -- S3 URL
+    resume_file VARCHAR(1024) DEFAULT NULL,                -- S3 URL
     rating FLOAT DEFAULT 0.0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     teacher_status ENUM('PENDING', 'APPROVED', 'REJECTED') DEFAULT 'PENDING',
@@ -40,7 +37,6 @@ CREATE TABLE IF NOT EXISTS teachers (
     ON DELETE CASCADE ON UPDATE CASCADE
 );
 
--- 3. email_verification 테이블 생성
 CREATE TABLE IF NOT EXISTS email_verification (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     email VARCHAR(255) NOT NULL,
@@ -50,12 +46,12 @@ CREATE TABLE IF NOT EXISTS email_verification (
     UNIQUE KEY unique_email (email)  -- 이메일 당 하나의 코드만 존재하도록 설정
 );
 
+-- 강의 관련 테이블(강의 정보, 강의 내용, 할인 정보)을 'lecture' 데이터베이스에 생성한다.
 USE `lecture`;
 
--- 4. product 테이블 생성 (강의 정보 저장)
 CREATE TABLE IF NOT EXISTS product (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,         -- 강의 고유 ID (Primary Key)
-    instructor_id BIGINT NOT NULL,                -- 강사 ID (teachers 테이블의 id 참조)
+    instructor_id BIGINT NOT NULL,                -- 강사 ID
     title VARCHAR(255) NOT NULL,                  -- 강의 제목
     description TEXT NOT NULL,                    -- 강의 설명
     price INT NOT NULL,                           -- 강의 가격
@@ -68,10 +64,9 @@ CREATE TABLE IF NOT EXISTS product (
     status ENUM('PENDING', 'APPROVED', 'REJECTED') DEFAULT 'PENDING'  -- 강의 승인 상태
 );
 
--- 5. product_contents 테이블 생성 (강의 내용 저장)
 CREATE TABLE IF NOT EXISTS product_contents (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,                    -- 강의 콘텐츠 고유 ID (Primary Key)
-    product_id BIGINT NOT NULL,                              -- 강의 ID (product 테이블의 id 참조)
+    product_id BIGINT NOT NULL,                              -- 강의 ID
     section INT NOT NULL,                                    -- 강의 섹션 번호 (순서 지정)
     title VARCHAR(255) NOT NULL,                             -- 강의 섹션 제목
     content TEXT,                                            -- 강의 내용 (텍스트 혹은 Markdown 형식)
@@ -79,51 +74,58 @@ CREATE TABLE IF NOT EXISTS product_contents (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP  -- 콘텐츠 수정일 (자동 업데이트)
 );
 
--- 사용 데이터베이스 설정: 결제 관련 테이블을 'order' 데이터베이스에 생성한다.
+CREATE TABLE lecture_discount (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    product_id BIGINT NOT NULL,
+    discount_stock INT NOT NULL DEFAULT 0,  -- 남은 할인 수량
+    discount_rate DECIMAL(5, 2) NOT NULL,   -- 할인율 (예: 50.00 = 50%)
+    start_time DATETIME NOT NULL,           -- 할인 시작 시간
+    end_time DATETIME NOT NULL,             -- 할인 종료 시간
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+-- lecture_discount에서 product_id로 빠르게 검색하기 위해 index 생성
+CREATE INDEX idx_lecture_discount_lecture_id ON lecture_discount(product_id);
+
+-- 결제 관련 테이블(결제 내역, 강의 내용, 할인 정보)을 'order' 데이터베이스에 생성한다.
 USE `order`;
 
--- 6. purchase 테이블 생성 (결제 기록 저장)
 CREATE TABLE IF NOT EXISTS purchase (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,                             -- 결제 고유 ID (Primary Key)
-    user_id BIGINT NOT NULL,                                          -- 결제를 한 사용자 ID (user.users 테이블의 id 참조)
-    product_id BIGINT NOT NULL,                                       -- 구매한 강의 ID (lectures.product 테이블의 id 참조)
-    merchant_uid VARCHAR(50) UNIQUE NOT NULL,                         -- 주문 고유 번호: 결제 완료 이후 결제 기록 조회나 위변조 대사 작업 시 사용
-    imp_uid VARCHAR(255),                                             -- 포트원 결제 고유 번호 (검증용)
-    product_price INT NOT NULL ,                                      -- 구매한 강의 가격
-    paid_amount INT NOT NULL ,                                        -- 결제된 금액
-    payment_method VARCHAR(50) NOT NULL,                              -- 결제 방식 (예: CREDIT_CARD, PAYPAL, KAKAO_PAY 등)
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,           -- 결제 고유 ID (Primary Key)
+    user_id BIGINT NOT NULL,                        -- 결제를 한 사용자 ID
+    product_id BIGINT NOT NULL,                     -- 구매한 강의 ID
+    merchant_uid VARCHAR(50) UNIQUE NOT NULL,       -- 주문 고유 번호: 결제 완료 후 결제 내역 조회나 위변조 대사 작업에 사용
+    imp_uid VARCHAR(255),                           -- 포트원 결제 고유 번호 (검증용)
+    product_price INT NOT NULL ,                    -- 구매한 강의 가격
+    paid_amount INT NOT NULL ,                      -- 결제된 금액
+    payment_method VARCHAR(50) NOT NULL,
     status ENUM('PENDING', 'COMPLETED', 'FAILED', 'CANCELED', 'ROLLBACK_REQUESTED', 'REFUNDED'),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,                   -- 결제 일시
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- 결제 일시
     is_verified BOOLEAN DEFAULT FALSE,
-    reason VARCHAR(255) NULL COMMENT '상태 변경 이유 (검증 시도 실패, 롤백 시도 실패 등)',
-    FOREIGN KEY (user_id) REFERENCES user.users(id)
-    ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (product_id) REFERENCES lecture.product(id)
+    reason VARCHAR(255) NULL COMMENT '상태 변경 이유 (검증 시도 실패, 롤백 시도 실패 등)'
 );
 
--- 7. rollback_failure 테이블 생성 (롤백 실패 저장)
+CREATE TABLE IF NOT EXISTS cancel_failure (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    purchase_id BIGINT NOT NULL,  
+    imp_uid VARCHAR(255) NOT NULL,
+    amount INT NOT NULL,                 -- 결제된 금액
+    reason TEXT,                         -- 실패 이유 (ex. DB save 실패 메시지)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS rollback_failure (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    purchase_id BIGINT NOT NULL,                    -- purchase table의 PK인 id 값이지만 따로 관리하기 위해 fk 사용 x
+    purchase_id BIGINT NOT NULL,        -- purchase의 id값이지만 따로 관리하려고 FK 사용 x
     imp_uid VARCHAR(255) NOT NULL,
-    amount INT NOT NULL,                            -- 결제된 금액
+    amount INT NOT NULL,                -- 결제된 금액
     reason TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 8. 사용자 취소 실패를 저장하는 테이블
-CREATE TABLE IF NOT EXISTS cancel_failure (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    purchase_id BIGINT NOT NULL,             -- purchase 테이블의 PK, fk 없이 저장
-    imp_uid VARCHAR(255) NOT NULL,           -- PortOne imp_uid
-    amount INT NOT NULL,                     -- 결제된 금액
-    reason TEXT,                             -- 실패 이유 (ex. DB save 실패 메시지)
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE discount_rollback_failure (
-		id BIGINT AUTO_INCREMENT PRIMARY KEY,
-	  product_id BIGINT NOT NULL,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+	product_id BIGINT NOT NULL,
     purchase_id BIGINT NOT NULL,
     reason TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
